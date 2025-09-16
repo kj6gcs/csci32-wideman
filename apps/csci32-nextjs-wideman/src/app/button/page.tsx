@@ -6,7 +6,7 @@ import { Variant } from '@repo/ui/variant'
 import { useState } from 'react'
 import React from 'react'
 import Image from 'next/image'
-import Footer from '../../components/footer'
+import Footer from '../../components/Footer'
 
 export default function ButtonPage() {
   const [name, setName] = useState('')
