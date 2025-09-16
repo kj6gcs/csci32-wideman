@@ -11,11 +11,12 @@
   ],
   "exports": {
     "./styles.css": "./dist/index.css",
-    "./": "./dist/.js",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
-    "./size": "./src/size.tsx",
-    "./variant": "./src/variant.tsx",
+    "./input": "./src/input.tsx",
+    "./size": "./src/size.ts",
+    "./tokens": "./src/tokens.ts",
+    "./variant": "./src/variant.ts",
     "./code": "./src/code.tsx"
   },
   "scripts": {
