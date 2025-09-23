@@ -1,7 +1,7 @@
 'use client'
 import { Button } from '@repo/ui/button'
 import type { GuessingGameMenuProps } from './page'
-import { FormEventHandler, useState } from 'react'
+import { useState } from 'react'
 import { Input } from '@repo/ui/input'
 
 export default function RandomNumberGameMenu({ startGame }: GuessingGameMenuProps) {
@@ -51,12 +51,17 @@ export default function RandomNumberGameMenu({ startGame }: GuessingGameMenuProp
       ) : (
         <div className="flex flex-col gap-4">
           <header className="flex flex-col gap-4">
-            <h1 className="text-2xl font-bold">Yay. You've made it.</h1>
-            <p>Don&#39;t mistake my lack of excitement to mean this is a boring game.</p>
-            <p>Or do. You&#39;re probably over there, asking yourself "Do I pick the number six or only five?:</p>
-            <p>There&#39;s only really one question you should be asking, and that&#39;s "Do I feel lucky?"</p>
+            <h1 className="text-2xl font-bold">Yay. You&apos;ve made it.</h1>
+            <p>Don&apos;t mistake my lack of excitement to mean this is a boring game.</p>
+            <p>
+              Or do. You&apos;re probably over there, asking yourself &quot;Do I pick the number six or only five?&quot;
+            </p>
+            <p>
+              There&apos;s only really one question you should be asking, and that&apos;s &quot;Do I feel lucky?&quot;
+            </p>
             <p>Well, do you, Punk?</p>
           </header>
+
           <form
             onSubmit={(e) => {
               e.preventDefault()
