@@ -11,8 +11,8 @@
   "dependencies": {
     "next": "15.5.0",
     "react": "19.1.0",
-    "@repo/ui": "workspace:*",
-    "@repo/math": "workspace:*",
+    "@repo/ui": "0.0.0",
+    "@repo/math": "0.0.0",
     "react-dom": "19.1.0"
   },
   "devDependencies": {
