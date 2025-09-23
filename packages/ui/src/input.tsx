@@ -8,7 +8,7 @@ import { getInputCommonStyles } from './tokens'
 export type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> & {
   variant?: Variant
   size?: Size
-
+  /** Optional legacy convenience callback—also called on change */
   setValue?: (newValue: string) => void
 }
 
