@@ -1,7 +1,7 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  transpilePackages: ['@repo/ui', '@repo/math'], // 👈 add your internal packages here
+}
 
-export default nextConfig;
+export default nextConfig
