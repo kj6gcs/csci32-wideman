@@ -3,3 +3,8 @@ dist
 
 # Turborepo
 .turbo
+
+# All .env Files
+*.env
+*.env.*
+.env
