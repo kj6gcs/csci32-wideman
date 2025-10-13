@@ -9,11 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@repo/math": "0.0.0",
+    "@repo/ui": "0.0.0",
     "next": "15.5.0",
     "react": "19.1.0",
-    "@repo/ui": "0.0.0",
-    "@repo/math": "0.0.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-hook-form": "^7.65.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
