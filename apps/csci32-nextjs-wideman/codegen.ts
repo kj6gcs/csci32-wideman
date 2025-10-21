@@ -10,21 +10,28 @@ const localSnapshot = path.resolve(__dirname, 'schema.local.graphql')
 // 2) Local/dev can hit your remote (Supabase) or your local server
 const schemaUrl = process.env.SCHEMA_URL ?? 'http://127.0.0.1:4000/graphql'
 const token = process.env.SCHEMA_TOKEN
-const supabaseHeaders = token ? { apikey: token, Authorization: `Bearer ${token}` } : {}
 
-// Build the schema source
-const remoteWithHeaders = [{ [schemaUrl]: { headers: supabaseHeaders } }]
-const schemaSource = isCI ? localSnapshot : remoteWithHeaders
+// Make headers either a real map or undefined (not a {} union)
+const supabaseHeaders: Record<string, string> | undefined = token
+  ? { apikey: token, Authorization: `Bearer ${token}` }
+  : undefined
+
+// --- Typed HTTP schema pointer ---
+type HttpSchemaPointer = { [url: string]: { headers?: Record<string, string> } }
+const remoteWithHeaders: HttpSchemaPointer[] = [{ [schemaUrl]: { headers: supabaseHeaders } }]
+
+// Build the schema source (cast to satisfy Codegen’s schema type)
+const schemaSource: CodegenConfig['schema'] = isCI
+  ? localSnapshot
+  : (remoteWithHeaders as unknown as CodegenConfig['schema'])
 
 // Helpful logging that reflects the actual source
-// (Avoid logging schemaUrl when we’re using the snapshot.)
 console.log(`[codegen] Using ${isCI ? 'snapshot' : 'remote'} schema: ${isCI ? localSnapshot : schemaUrl}`)
 
 const config: CodegenConfig = {
   schema: schemaSource,
   documents: ['src/**/*.{ts,tsx,graphql,gql}', '!src/generated/**/*'],
   generates: {
-    // optional: keeps a pretty-printed schema for reference
     'schema.graphql': { plugins: ['schema-ast'] },
     'src/generated/': {
       preset: 'client',

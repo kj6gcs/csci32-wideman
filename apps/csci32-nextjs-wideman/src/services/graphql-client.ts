@@ -1,6 +1,5 @@
-// apps/csci32-nextjs-wideman/src/services/graphql-client.ts
 import { GraphQLClient, RequestDocument } from 'graphql-request'
-import type { DocumentNode } from 'graphql'
+import type { DocumentNode, DefinitionNode, OperationDefinitionNode } from 'graphql'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -43,10 +42,16 @@ function getOperationName(doc: RequestDocument): string | null {
     const m = doc.match(/\bmutation\s+(\w+)/) || doc.match(/\bquery\s+(\w+)/)
     return m?.[1] ?? null
   }
-  const ast = doc as DocumentNode
-  const body = ast.loc?.source.body ?? ''
-  const m = body.match(/\bmutation\s+(\w+)/) || body.match(/\bquery\s+(\w+)/)
-  return m?.[1] ?? null
+  // Read from AST definitions (loc is often stripped in prod)
+  const maybeDoc = doc as Partial<DocumentNode>
+  const defs = Array.isArray(maybeDoc.definitions) ? (maybeDoc.definitions as DefinitionNode[]) : []
+  for (const def of defs) {
+    if (def.kind === 'OperationDefinition') {
+      const od = def as OperationDefinitionNode
+      if (od.name?.value) return od.name.value
+    }
+  }
+  return null
 }
 
 type Vars = Record<string, unknown>
