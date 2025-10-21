@@ -1,36 +1,30 @@
+// apps/csci32-nextjs-wideman/codegen.ts
 import type { CodegenConfig } from '@graphql-codegen/cli'
+import path from 'node:path'
 
 const isCI = !!process.env.VERCEL || process.env.CI === 'true'
 
-// Still trying to get it to run in Vercel....
-const schemaUrl = isCI ? process.env.SCHEMA_URL : (process.env.SCHEMA_URL ?? 'http://127.0.0.1:4000/graphql')
+// 1) CI uses the checked-in snapshot (so auth mutations exist)
+const localSnapshot = path.resolve(__dirname, 'schema.local.graphql')
 
-if (isCI && !schemaUrl) {
-  console.error('[codegen] SCHEMA_URL is not set in CI. Set SCHEMA_URL to your public GraphQL endpoint.')
-  process.exit(1)
-}
-
+// 2) Local/dev can hit your remote (Supabase) or your local server
+const schemaUrl = process.env.SCHEMA_URL ?? 'http://127.0.0.1:4000/graphql'
 const token = process.env.SCHEMA_TOKEN
-if (isCI && !token) {
-  console.warn('[codegen] SCHEMA_TOKEN is missing — Supabase will reject without apikey')
-}
-const headers = token ? { apikey: token, Authorization: `Bearer ${token}` } : {}
+const supabaseHeaders = token ? { apikey: token, Authorization: `Bearer ${token}` } : {}
 
-// Showing where we’re fetching the schema from
-console.log(`[codegen] Using schema: ${schemaUrl}`)
+// Build the schema source
+const remoteWithHeaders = [{ [schemaUrl]: { headers: supabaseHeaders } }]
+const schemaSource = isCI ? localSnapshot : remoteWithHeaders
 
-const useRemoteWithHeaders = !!(schemaUrl && token)
-const schemaSource = useRemoteWithHeaders
-  ? [{ [schemaUrl!]: { headers } }]
-  : // Fallbacks:
-    schemaUrl
-    ? schemaUrl
-    : 'schema.graphql'
+// Helpful logging that reflects the actual source
+// (Avoid logging schemaUrl when we’re using the snapshot.)
+console.log(`[codegen] Using ${isCI ? 'snapshot' : 'remote'} schema: ${isCI ? localSnapshot : schemaUrl}`)
 
 const config: CodegenConfig = {
   schema: schemaSource,
   documents: ['src/**/*.{ts,tsx,graphql,gql}', '!src/generated/**/*'],
   generates: {
+    // optional: keeps a pretty-printed schema for reference
     'schema.graphql': { plugins: ['schema-ast'] },
     'src/generated/': {
       preset: 'client',

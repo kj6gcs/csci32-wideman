@@ -45,3 +45,5 @@ schema.graphql
 
 # Generated types from schema introspection
 src/generated
+
+!apps/csci32-nextjs-wideman/schema.local.graphql
