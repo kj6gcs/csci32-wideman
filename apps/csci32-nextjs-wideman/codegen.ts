@@ -1,7 +1,9 @@
 import type { CodegenConfig } from '@graphql-codegen/cli'
 
+const schemaUrl = process.env.SCHEMA_URL || 'http://127.0.0.1:4000/graphql'
+
 const config: CodegenConfig = {
-  schema: 'http://localhost:4000/graphql',
+  schema: schemaUrl,
   documents: ['src/**/*.{ts,tsx}', '!src/generated/**/*'],
   generates: {
     'schema.graphql': {
