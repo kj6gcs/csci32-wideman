@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+'use client'
+
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { gqlClient, setAuthToken, clearAuthToken } from '../services/graphql-client'
 import { graphql } from '../generated/gql'
@@ -31,6 +33,55 @@ const SIGN_IN_MUTATION = graphql(`
   }
 `) as unknown as RequestDocument
 
+async function requestWithRetry<T>(doc: RequestDocument, vars?: Record<string, unknown>, tries = 2): Promise<T> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await gqlClient.request<T>(doc, vars)
+    } catch (e) {
+      if (i === tries - 1) throw e
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)))
+    }
+  }
+  throw new Error('unreachable')
+}
+
+// Error extraction with more details
+function extractErrorMessage(err: unknown, fallback: string): string {
+  // full details in dev console
+  // eslint-disable-next-line no-console
+  console.error('Auth error:', err)
+
+  if (err instanceof ClientError) {
+    const gqlMsg = err.response?.errors?.[0]?.message
+    if (gqlMsg) return gqlMsg
+
+    const status = err.response?.status
+    const statusText = err.response?.statusText
+    const requestObj = (err as ClientError).request as unknown
+    let url: string | undefined
+    if (requestObj && typeof requestObj === 'object' && 'url' in requestObj) {
+      const maybeUrl = (requestObj as { url?: unknown }).url
+      if (typeof maybeUrl === 'string') url = maybeUrl
+    }
+    const bodyPreview =
+      typeof err.response?.data === 'string'
+        ? err.response.data.slice(0, 200)
+        : JSON.stringify(err.response?.data ?? {}).slice(0, 200)
+
+    return `Request failed ${status ?? ''} ${statusText ?? ''} at ${url ?? ''} — ${bodyPreview || fallback}`.trim()
+  }
+
+  if (err && typeof err === 'object' && 'message' in err) {
+    const maybeMessage = (err as { message?: unknown }).message
+    if (typeof maybeMessage === 'string' && maybeMessage.length) {
+      return maybeMessage
+    }
+    return fallback
+  }
+
+  return fallback
+}
+
 export function useAuth() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,43 +90,35 @@ export function useAuth() {
   const router = useRouter()
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('authUser')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    try {
+      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('authUser') : null
+      if (storedUser) setUser(JSON.parse(storedUser))
+    } catch {
+    } finally {
+      setIsHydrated(true)
     }
-    setIsHydrated(true)
   }, [])
-
-  const extractErrorMessage = (err: unknown, fallback: string): string => {
-    if (err instanceof ClientError) {
-      return err.response?.errors?.[0]?.message || fallback
-    }
-    return fallback
-  }
 
   const signUp = async (input: SignUpInput): Promise<AuthPayload | null> => {
     try {
       setIsLoading(true)
       setError(null)
-      const result = await gqlClient.request(SIGN_UP_MUTATION, { input })
 
-      if (result.signUp) {
+      const result = await requestWithRetry<{ signUp: AuthPayload | null }>(SIGN_UP_MUTATION, { input })
+
+      if (result?.signUp) {
         setAuthToken(result.signUp.token)
-
         setUser(result.signUp.user)
         if (typeof window !== 'undefined') {
           localStorage.setItem('authUser', JSON.stringify(result.signUp.user))
         }
-
         router.push('/dashboard')
-
         return result.signUp
       }
 
       return null
     } catch (err) {
-      const errorMessage = extractErrorMessage(err, 'Sign up failed')
-      setError(errorMessage)
+      setError(extractErrorMessage(err, 'Sign up failed'))
       return null
     } finally {
       setIsLoading(false)
@@ -87,25 +130,21 @@ export function useAuth() {
       setIsLoading(true)
       setError(null)
 
-      const result = await gqlClient.request(SIGN_IN_MUTATION, { input })
+      const result = await requestWithRetry<{ signIn: AuthPayload | null }>(SIGN_IN_MUTATION, { input })
 
-      if (result.signIn) {
+      if (result?.signIn) {
         setAuthToken(result.signIn.token)
-
         setUser(result.signIn.user)
         if (typeof window !== 'undefined') {
           localStorage.setItem('authUser', JSON.stringify(result.signIn.user))
         }
-
         router.push('/dashboard')
-
         return result.signIn
       }
 
       return null
     } catch (err) {
-      const errorMessage = extractErrorMessage(err, 'Sign in failed')
-      setError(errorMessage)
+      setError(extractErrorMessage(err, 'Sign in failed'))
       return null
     } finally {
       setIsLoading(false)
@@ -121,9 +160,7 @@ export function useAuth() {
     setError(null)
   }
 
-  const clearError = () => {
-    setError(null)
-  }
+  const clearError = () => setError(null)
 
   return {
     isLoading,

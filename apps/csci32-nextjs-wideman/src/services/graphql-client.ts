@@ -1,34 +1,33 @@
 import { GraphQLClient } from 'graphql-request'
 
-const GRAPHQL_API_URL = '/graphql'
+const isBrowser = typeof window !== 'undefined'
 
-// This is the singleton GraphQL client:
-export const gqlClient = new GraphQLClient(`${process.env.NEXT_PUBLIC_API_URL}${GRAPHQL_API_URL}`)
+// Server (SSR/RSC) uses explicit base; Browser uses window.location.origin (absolute)
+const serverBase = process.env.NEXT_SERVER_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000'
 
-// Auth helper functions are here:
+const endpoint = isBrowser
+  ? `${window.location.origin.replace(/\/+$/, '')}/graphql` // absolute URL for browser
+  : `${serverBase.replace(/\/+$/, '')}/graphql` // server-side base
+
+if (process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line no-console
+  console.log('[gql endpoint]', endpoint)
+}
+
+export const gqlClient = new GraphQLClient(endpoint)
+
 export function setAuthToken(token: string) {
   gqlClient.setHeader('Authorization', `Bearer ${token}`)
-  // Stores it in localStorage for persistence
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('authToken', token)
-  }
+  if (isBrowser) localStorage.setItem('authToken', token)
 }
-
 export function clearAuthToken() {
   gqlClient.setHeader('Authorization', '')
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('authToken')
+  if (isBrowser) localStorage.removeItem('authToken')
+}
+export function initializeAuth() {
+  if (isBrowser) {
+    const t = localStorage.getItem('authToken')
+    if (t) gqlClient.setHeader('Authorization', `Bearer ${t}`)
   }
 }
-
-export function intializeAuth() {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('authToken')
-    if (token) {
-      gqlClient.setHeader('Authorization', `Bearer ${token}`)
-    }
-  }
-}
-
-// Initialize auth on module loading
-intializeAuth()
+initializeAuth()
