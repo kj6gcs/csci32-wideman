@@ -1,33 +1,119 @@
-import { GraphQLClient } from 'graphql-request'
+// apps/csci32-nextjs-wideman/src/services/graphql-client.ts
+import { GraphQLClient, RequestDocument } from 'graphql-request'
+import type { DocumentNode } from 'graphql'
+import { createClient as createSupabase } from '@supabase/supabase-js'
 
-const isBrowser = typeof window !== 'undefined'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Server (SSR/RSC) uses explicit base; Browser uses window.location.origin (absolute)
-const serverBase = process.env.NEXT_SERVER_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000'
-
-const endpoint = isBrowser
-  ? `${window.location.origin.replace(/\/+$/, '')}/graphql` // absolute URL for browser
-  : `${serverBase.replace(/\/+$/, '')}/graphql` // server-side base
-
-if (process.env.NODE_ENV !== 'production') {
-  // eslint-disable-next-line no-console
-  console.log('[gql endpoint]', endpoint)
-}
+const endpoint =
+  process.env.NEXT_PUBLIC_GRAPHQL_URL ||
+  (SUPABASE_URL ? `${SUPABASE_URL.replace(/\/+$/, '')}/graphql/v1` : '/api/graphql')
 
 export const gqlClient = new GraphQLClient(endpoint)
 
+// For Supabase GraphQL table access, send anon key by default
+if (SUPABASE_ANON_KEY) {
+  gqlClient.setHeader('apikey', SUPABASE_ANON_KEY)
+  gqlClient.setHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`)
+}
+
+// ---- Token management used by your hook ----
+let runtimeAuthToken: string | null = null
 export function setAuthToken(token: string) {
+  runtimeAuthToken = token
+  if (SUPABASE_ANON_KEY) gqlClient.setHeader('apikey', SUPABASE_ANON_KEY)
   gqlClient.setHeader('Authorization', `Bearer ${token}`)
-  if (isBrowser) localStorage.setItem('authToken', token)
 }
 export function clearAuthToken() {
-  gqlClient.setHeader('Authorization', '')
-  if (isBrowser) localStorage.removeItem('authToken')
-}
-export function initializeAuth() {
-  if (isBrowser) {
-    const t = localStorage.getItem('authToken')
-    if (t) gqlClient.setHeader('Authorization', `Bearer ${t}`)
+  runtimeAuthToken = null
+  const headers: Record<string, string> = {}
+  if (SUPABASE_ANON_KEY) {
+    headers['apikey'] = SUPABASE_ANON_KEY
+    headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`
   }
+  gqlClient.setHeaders(headers)
 }
-initializeAuth()
+
+// ---- Supabase Auth shim for SignUp / SignIn (no `any`) ----
+const supabase = createSupabase(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+function getOperationName(doc: RequestDocument): string | null {
+  if (typeof doc === 'string') {
+    const m = doc.match(/\bmutation\s+(\w+)/) || doc.match(/\bquery\s+(\w+)/)
+    return m?.[1] ?? null
+  }
+  const ast = doc as DocumentNode
+  const body = ast.loc?.source.body ?? ''
+  const m = body.match(/\bmutation\s+(\w+)/) || body.match(/\bquery\s+(\w+)/)
+  return m?.[1] ?? null
+}
+
+type Vars = Record<string, unknown>
+function isSignUpVars(v: unknown): v is { input: { email: string; password: string; name?: string } } {
+  if (!v || typeof v !== 'object') return false
+  const input = (v as Record<string, unknown>).input
+  if (!input || typeof input !== 'object') return false
+  const i = input as Record<string, unknown>
+  return typeof i.email === 'string' && typeof i.password === 'string'
+}
+function isSignInVars(v: unknown): v is { input: { email: string; password: string } } {
+  if (!v || typeof v !== 'object') return false
+  const input = (v as Record<string, unknown>).input
+  if (!input || typeof input !== 'object') return false
+  const i = input as Record<string, unknown>
+  return typeof i.email === 'string' && typeof i.password === 'string'
+}
+
+const rawRequest = gqlClient.request.bind(gqlClient)
+
+async function requestShim<T>(doc: RequestDocument, vars?: Vars): Promise<T> {
+  const name = getOperationName(doc)
+
+  if (name === 'SignUp' && isSignUpVars(vars)) {
+    const { email, password, name: displayName } = vars.input
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: displayName ? { data: { name: displayName } } : undefined,
+    })
+    if (error) throw error
+    const token = data.session?.access_token ?? ''
+    const u = data.user
+    if (!u || !token) {
+      throw new Error('Check your email to confirm your account before signing in.')
+    }
+    const meta = (u.user_metadata ?? {}) as Record<string, unknown>
+    const safeName = typeof meta.name === 'string' ? meta.name : null
+    setAuthToken(token)
+    return {
+      signUp: {
+        token,
+        user: { user_id: u.id, name: safeName, email: u.email },
+      },
+    } as unknown as T
+  }
+
+  if (name === 'SignIn' && isSignInVars(vars)) {
+    const { email, password } = vars.input
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+    const token = data.session?.access_token ?? ''
+    const u = data.user
+    if (!u || !token) throw new Error('Invalid credentials')
+    const meta = (u.user_metadata ?? {}) as Record<string, unknown>
+    const safeName = typeof meta.name === 'string' ? meta.name : null
+    setAuthToken(token)
+    return {
+      signIn: {
+        token,
+        user: { user_id: u.id, name: safeName, email: u.email },
+      },
+    } as unknown as T
+  }
+
+  return rawRequest<T>(doc, vars)
+}
+
+// Monkey-patch the client method, preserving its type
+;(gqlClient as unknown as { request: typeof requestShim }).request = requestShim
