@@ -8,21 +8,23 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "prisma:generate": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx ./prisma/seed.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "prisma": "^6.16.2",
+    "@types/node": "^24.3.0",
+    "prisma": "^6.15.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.2",
-    "express": "^5.1.0",
-    "graphql": "^16.11.0",
-    "graphql-http": "^1.22.4"
+    "@prisma/client": "6.15.0"
   }
 }

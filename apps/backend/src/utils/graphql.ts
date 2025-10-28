@@ -1,19 +1,28 @@
-// apps/backend/src/utils/graphql.ts
-import 'reflect-metadata'
-import { buildSchema } from 'type-graphql'
-import type { NonEmptyArray } from 'type-graphql'
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-
 import { UserResolver } from '@/resolvers/UserResolver'
-import type { UserService } from '@/services/UserService'
+import { buildSchema, registerEnumType } from 'type-graphql'
+import { customAuthChecker } from '@/utils/authChecker'
+import { PermissionName, RoleName } from 'csci32-database'
+import type { NonEmptyArray } from 'type-graphql'
+import type { FastifyInstance, FastifyReply, FastifyRequest, FastifyBaseLogger } from 'fastify'
 import { PrismaClient } from 'csci32-database'
-
+import { getBooleanEnvVar, getRequiredStringEnvVar } from '@/utils'
+import type { UserService } from '@/services/UserService'
 import mercurius from 'mercurius'
 import mercuriusLogging from 'mercurius-logging'
 
-const GRAPHQL_API_PATH = '/graphql'
-const UI_PATH = '/graphiql'
+const GRAPHQL_API_PATH = '/api/graphql'
 const GRAPHQL_DEPTH_LIMIT = 7
+
+// 1️⃣ Register the enums with TypeGraphQL
+registerEnumType(PermissionName, {
+  name: 'PermissionName',
+  description: 'Enum representing valid permissions for authorization',
+})
+
+registerEnumType(RoleName, {
+  name: 'RoleName',
+  description: 'Enum representing valid roles for users',
+})
 
 const resolvers = [UserResolver] as NonEmptyArray<Function>
 
@@ -22,65 +31,38 @@ export interface Context {
   reply: FastifyReply
   userService: UserService
   prisma: PrismaClient
+  log: FastifyBaseLogger
 }
 
 export async function registerGraphQL(fastify: FastifyInstance) {
   const schema = await buildSchema({
     resolvers,
-    validate: false,
+    authChecker: customAuthChecker,
   })
 
-  await fastify.register(mercurius, {
+  const graphiql = getBooleanEnvVar('ENABLE_GRAPHIQL', false)
+  fastify.log.info(`GraphiQL is ${graphiql ? 'enabled' : 'disabled'}`)
+
+  const options = {
     schema,
-    path: GRAPHQL_API_PATH,
     cache: false,
-    graphiql: false, // we serve our own UI route below
-    ide: false,
+    path: GRAPHQL_API_PATH,
+    graphiql,
     queryDepth: GRAPHQL_DEPTH_LIMIT,
-    allowBatchedQueries: false,
-    // allowIntrospection: true, // ensure the UI can introspect the schema
     context: (request: FastifyRequest, reply: FastifyReply): Context => ({
       request,
       reply,
       userService: fastify.userService,
       prisma: fastify.prisma,
+      log: fastify.log,
     }),
-  })
+    allowBatchedQueries: false,
+  }
 
-  // Lightweight, pinned GraphiQL HTML (no extra deps)
-  const graphiqlHTML = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>GraphiQL</title>
-    <link rel="stylesheet" href="https://unpkg.com/graphiql@2.4.0/graphiql.min.css"/>
-    <style>html,body,#graphiql{height:100%;margin:0}</style>
-  </head>
-  <body>
-    <div id="graphiql">Loading…</div>
-    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/graphiql@2.4.0/graphiql.min.js"></script>
-    <script>
-      const fetcher = GraphiQL.createFetcher({ url: '${GRAPHQL_API_PATH}' });
-      const el = React.createElement(GraphiQL, {
-        fetcher,
-        headerEditorEnabled: true,
-        defaultEditorToolsVisibility: true,
-        query: '{ __typename }'
-      });
-      ReactDOM.render(el, document.getElementById('graphiql'));
-    </script>
-  </body>
-</html>`
-
-  fastify.get(UI_PATH, async (_req, reply) => {
-    reply.type('text/html').send(graphiqlHTML)
-  })
-
+  await fastify.register(mercurius, options)
   await fastify.register(mercuriusLogging, {
     prependAlias: true,
     logBody: true,
-    logVariables: (process.env.NODE_ENV ?? 'development') === 'development',
+    logVariables: getRequiredStringEnvVar('NODE_ENV') === 'development',
   })
 }
