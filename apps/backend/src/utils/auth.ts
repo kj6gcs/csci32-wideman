@@ -1,6 +1,8 @@
-// apps/backend/src/utils/auth.ts
+// Note: As I was having significant issues getting authorization through the GraphQL GUI to work properly,
+// I utilized ChatGPT to help debug/resolve some errors I was facing.
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import crypto from 'node:crypto'
 
 // --- env helpers ---
 function readEnvMultiline(name: string): string | undefined {
@@ -16,16 +18,33 @@ function readEnvBase64(name: string): string | undefined {
 
 // Prefer PRIVATE_KEY (PEM, with \n), or PRIVATE_KEY_B64; alternatively use JWT_SECRET for HMAC
 const PRIVATE_KEY = readEnvMultiline('PRIVATE_KEY') ?? readEnvBase64('PRIVATE_KEY_B64')
-
 const JWT_SECRET = process.env.JWT_SECRET
 
-// Choose algorithm:
-// - If you have a PRIVATE_KEY and no explicit ALGORITHM, default to ES256 (ECDSA).
-// - If you only have JWT_SECRET and no ALGORITHM, default to HS256.
-const explicitAlg = process.env.ALGORITHM as jwt.Algorithm | undefined
-const ALG: jwt.Algorithm = explicitAlg ?? (PRIVATE_KEY ? 'ES256' : 'HS256')
+// -------------------------
+// Algorithm selection (kept minimal, robust)
+// -------------------------
+// Prefer JWT_ALG (backend env), then ALGORITHM (legacy)
+const envAlg = (process.env.JWT_ALG ?? process.env.ALGORITHM) as jwt.Algorithm | undefined
 
-// Basic sanity checks to avoid the “alg parameter…” confusion:
+function inferAlg(): jwt.Algorithm {
+  if (JWT_SECRET) return 'HS256'
+  if (PRIVATE_KEY) {
+    if (/BEGIN RSA/i.test(PRIVATE_KEY)) return 'RS256'
+    if (/BEGIN EC/i.test(PRIVATE_KEY)) return 'ES256'
+    // Generic "BEGIN PRIVATE KEY" — ask Node what it is
+    try {
+      const k = crypto.createPrivateKey(PRIVATE_KEY)
+      return k.asymmetricKeyType === 'rsa' ? 'RS256' : k.asymmetricKeyType === 'ec' ? 'ES256' : 'RS256'
+    } catch {
+      return 'RS256'
+    }
+  }
+  throw new Error('No JWT signing material found (set JWT_SECRET or PRIVATE_KEY).')
+}
+
+const ALG: jwt.Algorithm = envAlg ?? inferAlg()
+
+// Basic sanity checks to avoid mismatches
 const isHmac = ALG.startsWith('HS')
 const isRsa = ALG.startsWith('RS') || ALG.startsWith('PS')
 const isEc = ALG.startsWith('ES')
@@ -47,6 +66,7 @@ if (PRIVATE_KEY && isRsa && /BEGIN EC/i.test(PRIVATE_KEY)) {
   console.warn('Warning: Using RS*/PS* algorithm with a key that looks like EC.')
 }
 
+// -------- password helpers --------
 export async function hashPassword(plain: string): Promise<string> {
   const rounds = Number(process.env.BCRYPT_ROUNDS ?? 12)
   return bcrypt.hash(plain, rounds)
@@ -56,8 +76,9 @@ export async function comparePassword(plain: string, hash: string): Promise<bool
   return bcrypt.compare(plain, hash)
 }
 
+// -------- token signing --------
 export function signToken(claims: Record<string, unknown>): string {
-  const exp = process.env.EXPIRATION ?? '2h'
+  const exp = process.env.JWT_EXPIRES_IN ?? process.env.EXPIRATION ?? '2h'
   const aud = process.env.AUD ?? 'csci32-frontend'
   const iss = process.env.ISS ?? 'csci32-backend'
 
@@ -87,5 +108,35 @@ export function signToken(claims: Record<string, unknown>): string {
         header: { typ: 'JWT' },
       } as jwt.SignOptions,
     )
+  }
+}
+
+// -------- minimal header verification helper (use in your existing server file) --------
+export function verifyAuthHeader(req: { headers?: Record<string, unknown> }) {
+  const raw = (req.headers?.authorization as string | undefined) ?? (req.headers?.Authorization as string | undefined)
+
+  if (!raw || !raw.startsWith('Bearer ')) return null
+
+  const token = raw.slice(7)
+  const pubPem = (process.env.PUBLIC_KEY || '').replace(/\\n/g, '\n')
+
+  try {
+    const payload = jwt.verify(token, isHmac ? (JWT_SECRET as string) : pubPem, {
+      algorithms: [ALG],
+      audience: process.env.AUD || 'csci32-frontend',
+      issuer: process.env.ISS || 'csci32-backend',
+      clockTolerance: 5, // seconds
+    }) as any
+
+    return {
+      id: payload.sub as string | undefined,
+      email: payload.email as string | undefined,
+      name: payload.name as string | undefined,
+      role: payload.role as string | undefined,
+      permissions: payload.permissions as string[] | undefined,
+      raw: payload, // optional for debugging
+    }
+  } catch {
+    return null
   }
 }

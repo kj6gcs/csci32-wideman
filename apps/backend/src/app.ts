@@ -5,9 +5,9 @@ import Fastify from 'fastify'
 import { fileURLToPath } from 'node:url'
 import autoLoad from '@fastify/autoload'
 import { dirname, join } from 'node:path'
+import { registerGraphQL } from './utils/graphql'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-import { registerGraphQL } from './utils/graphql'
 
 dotenv.config()
 const fastify = Fastify({
@@ -26,16 +26,15 @@ const fastify = Fastify({
       : true,
 })
 
-void fastify.register(autoLoad, {
-  dir: join(__dirname, 'plugins'),
-  forceESM: true,
-})
-
 /**
  * Run the server!
  */
 const start = async () => {
   try {
+    await fastify.register(autoLoad, {
+      dir: join(__dirname, 'plugins'),
+      forceESM: true,
+    })
     await registerGraphQL(fastify)
     await fastify.listen({ port: 4000 })
   } catch (err) {

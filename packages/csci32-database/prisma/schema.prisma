@@ -22,35 +22,32 @@ enum PermissionName {
 }
 
 model User {
-  user_id       String   @id @default(cuid())
-  name          String?
-  email         String?  @unique
-  emailVerified DateTime?
-  passwordHash  String?
-  role_id        String?
-  role          Role?    @relation(fields: [role_id], references: [role_id])
+  user_id      String  @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role_id      String?
+  role         Role?    @relation(fields: [role_id], references: [role_id])
 }
 
 model Role {
-  role_id     String           @id @default(cuid())
-  name        RoleName     @unique
-  users       User[]
+  role_id          String @id @default(cuid())
+  name             RoleName @unique
+  users            User[]
   role_permissions RolePermission[]
 }
 
 model Permission {
-  permission_id String           @id @default(cuid())
-  name          PermissionName   @unique
-  roles         RolePermission[]
+  permission_id String @id @default(cuid())
+  name          PermissionName @unique
+  role_permissions RolePermission[]
 }
 
 model RolePermission {
-  role_id        String
-  permission_id  String
-
-  role        Role        @relation(fields: [role_id], references: [role_id])
-  permission  Permission  @relation(fields: [permission_id], references: [permission_id])
-
-  @@id([role_id, permission_id]) // composite primary key
-  @@unique([role_id, permission_id])
+  role_id       String
+  permission_id String
+  role          Role        @relation(fields: [role_id], references: [role_id])
+  permission    Permission  @relation(fields: [permission_id], references: [permission_id])
+  @@id([role_id, permission_id])
 }
+
