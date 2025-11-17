@@ -1,4 +1,5 @@
 import { UserResolver } from '@/resolvers/UserResolver'
+import { PostResolver } from '@/resolvers/types/PostResolver'
 import { buildSchema, registerEnumType } from 'type-graphql'
 import { customAuthChecker } from '@/utils/authChecker'
 import { PermissionName, RoleName } from 'csci32-database'
@@ -7,6 +8,7 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest }
 import { PrismaClient } from 'csci32-database'
 import { getBooleanEnvVar, getRequiredStringEnvVar } from '@/utils'
 import type { UserService } from '@/services/UserService'
+import type { PostService } from '@/services/PostService'
 import mercurius from 'mercurius'
 import mercuriusLogging from 'mercurius-logging'
 import { RoleResolver } from '@/resolvers/RoleResolver'
@@ -25,12 +27,13 @@ registerEnumType(RoleName, {
   description: 'Enum representing valid roles for users',
 })
 
-const resolvers = [UserResolver, RoleResolver] as NonEmptyArray<Function>
+const resolvers = [UserResolver, RoleResolver, PostResolver] as NonEmptyArray<Function>
 
 export interface Context {
   request: FastifyRequest
   reply: FastifyReply
   userService: UserService
+  postService: PostService
   prisma: PrismaClient
   log: FastifyBaseLogger
 }
@@ -54,6 +57,7 @@ export async function registerGraphQL(fastify: FastifyInstance) {
       request,
       reply,
       userService: fastify.userService,
+      postService: fastify.postService,
       prisma: fastify.prisma,
       log: fastify.log,
     }),

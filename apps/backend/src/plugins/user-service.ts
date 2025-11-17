@@ -1,7 +1,7 @@
 import { UserService } from '@/services/UserService'
 import type { FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
-import { PRISMA_FASTIFY_PLUGIN_NAME } from './prisma'
+import { PRISMA_FASTIFY_PLUGIN_NAME } from './00-prisma'
 
 declare module 'fastify' {
   interface FastifyInstance {

@@ -8,7 +8,8 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  // Temporarily disabling shadow DB for local dev / Supabase issues
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 enum RoleName {
@@ -28,8 +29,26 @@ model User {
   passwordHash String
   role_id      String?
   role         Role?    @relation(fields: [role_id], references: [role_id])
-}
 
+  posts        Post[]
+}
+model Post {
+  id         String    @id @default(cuid())
+  title      String
+  body       String
+  authorId   String
+  author     User      @relation(fields: [authorId], references: [user_id])
+  comments   Comment[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+model Comment {
+  id        String    @id @default(cuid())
+  body      String
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id])
+  createdAt DateTime  @default(now())
+}
 model Role {
   role_id          String @id @default(cuid())
   name             RoleName @unique

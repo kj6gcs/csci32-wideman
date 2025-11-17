@@ -13,3 +13,6 @@ private_key.pem
 public_key.pem
 keys/
 *.pem
+
+# Test Files:
+starwovenPrecursor.prisma
