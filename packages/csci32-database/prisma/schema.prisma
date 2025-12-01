@@ -32,6 +32,7 @@ model User {
 
   posts        Post[]
 }
+
 model Post {
   id         String    @id @default(cuid())
   title      String
@@ -42,6 +43,7 @@ model Post {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
+
 model Comment {
   id        String    @id @default(cuid())
   body      String
@@ -49,6 +51,7 @@ model Comment {
   post      Post      @relation(fields: [postId], references: [id])
   createdAt DateTime  @default(now())
 }
+
 model Role {
   role_id          String @id @default(cuid())
   name             RoleName @unique
@@ -57,8 +60,8 @@ model Role {
 }
 
 model Permission {
-  permission_id String @id @default(cuid())
-  name          PermissionName @unique
+  permission_id   String @id @default(cuid())
+  name            PermissionName @unique
   role_permissions RolePermission[]
 }
 
@@ -67,6 +70,53 @@ model RolePermission {
   permission_id String
   role          Role        @relation(fields: [role_id], references: [role_id])
   permission    Permission  @relation(fields: [permission_id], references: [permission_id])
+
   @@id([role_id, permission_id])
 }
 
+// 🚀 NEW: Starwoven Datacore Character, Faction, & Ship records - new model for final project goal
+model Character {
+  id          String   @id @default(cuid())
+  name        String
+  callsign    String?
+  role        String?
+  species     String?
+  homeworld   String?
+  bio         String?
+
+  shipId     String?
+  ship       Ship?    @relation(fields: [shipId], references: [id])
+
+  factionId  String?
+  faction    Faction? @relation(fields: [factionId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Ship {
+  id        String   @id @default(cuid())
+  name      String
+  model     String?
+  registry  String?
+  factionId String?
+
+  faction   Faction?      @relation(fields: [factionId], references: [id])
+  crew      Character[]   // ← reverse relation
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faction {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  motto     String?
+  colors    String?
+
+  characters Character[]
+  ships      Ship[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

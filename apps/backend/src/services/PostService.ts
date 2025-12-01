@@ -1,37 +1,65 @@
-import type { PrismaClient } from 'csci32-database'
+import type { PrismaClient, Prisma } from 'csci32-database'
 
 export interface ServiceDeps {
   prisma: PrismaClient
 }
 
-export type CreatePostData = {
+export type CreatePostInput = {
   title: string
   body: string
   comments?: { body: string }[]
 }
 
+export type ListPostsOptions = {
+  search?: string
+  skip?: number
+  take?: number
+  sortField?: 'createdAt' | 'title'
+  sortDirection?: 'asc' | 'desc'
+}
+
 export class PostService {
   constructor(private deps: ServiceDeps) {}
 
-  async createForAuthor(input: CreatePostData, authorUserId: string) {
+  async findOneById(id: string) {
     const { prisma } = this.deps
-    const { title, body, comments } = input
 
-    if (comments?.length) {
-      return prisma.post.create({
-        data: {
-          title,
-          body,
-          authorId: authorUserId,
-          comments: { create: comments },
-        },
-        include: { author: true, comments: true },
-      })
+    return prisma.post.findUnique({
+      where: { id },
+      include: {
+        author: true,
+        comments: true,
+      },
+    })
+  }
+
+  async findMany(options: ListPostsOptions = {}) {
+    const { prisma } = this.deps
+    const { search, skip = 0, take = 10, sortField = 'createdAt', sortDirection = 'desc' } = options
+
+    const where: Prisma.PostWhereInput =
+      search !== undefined
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { body: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}
+
+    const orderBy: Prisma.PostOrderByWithRelationInput = {
+      [sortField]: sortDirection,
     }
 
-    return prisma.post.create({
-      data: { title, body, authorId: authorUserId },
-      include: { author: true },
+    return prisma.post.findMany({
+      where,
+      orderBy,
+      skip,
+      take,
+      include: {
+        author: true,
+        comments: true,
+      },
     })
   }
 }
